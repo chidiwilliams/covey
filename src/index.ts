@@ -46,7 +46,7 @@ interface Parser {
 
 class ParseError extends Error {
   constructor(token: Token, message: string) {
-    super(message);
+    super(`Error at token: ${token.lexeme}: ${message}`);
   }
 }
 
@@ -150,7 +150,7 @@ class RecursiveDescentParser implements Parser {
   }
 
   private previous(): Token {
-    return this.tokens[this.current - 1];
+    return this.tokens[this.current - 1]!;
   }
 
   private check(tokenType: TokenType) {
@@ -166,7 +166,7 @@ class RecursiveDescentParser implements Parser {
   }
 
   private peek(): Token {
-    return this.tokens[this.current];
+    return this.tokens[this.current]!;
   }
 }
 
