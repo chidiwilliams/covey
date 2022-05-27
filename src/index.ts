@@ -43,7 +43,7 @@ class ParseError extends Error {
   }
 }
 
-class BaseParser {
+class Parser {
   private current = 0;
 
   constructor(private tokens: Token[]) {}
@@ -87,7 +87,7 @@ class BaseParser {
   }
 }
 
-class RecursiveDescentParser extends BaseParser {
+class RecursiveDescentParser extends Parser {
   constructor(tokens: Token[]) {
     super(tokens);
   }
@@ -191,7 +191,7 @@ interface ParseRule {
   precedence: Precedence;
 }
 
-class PrattParser extends BaseParser {
+class PrattParser extends Parser {
   private number: PrefixParseFn = () => {
     return new LiteralExpression(this.previous().literal!);
   };
