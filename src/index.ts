@@ -5,14 +5,11 @@ class Token {
 enum TokenType {
   PLUS = 'PLUS',
   MINUS = 'MINUS',
-  TILDE = 'TILDE',
   BANG = 'BANG',
-  NAME = 'NAME',
   NUMBER = 'NUMBER',
   EOF = 'EOF',
   STAR = 'STAR',
   SLASH = 'SLASH',
-  CARET = 'CARET',
   QUESTION_MARK = 'QUESTION_MARK',
   COLON = 'COLON',
   IDENTIFIER = 'IDENTIFIER',
@@ -40,20 +37,60 @@ class LiteralExpression {
   constructor(public value: number) {}
 }
 
-interface Parser {
-  parse(): Expression;
-}
-
 class ParseError extends Error {
   constructor(token: Token, message: string) {
     super(`Error at token: ${token.lexeme}: ${message}`);
   }
 }
 
-class RecursiveDescentParser implements Parser {
+class BaseParser {
   private current = 0;
 
   constructor(private tokens: Token[]) {}
+
+  protected parse(): Expression {
+    throw new Error('not implemented');
+  }
+
+  protected previous() {
+    return this.tokens[this.current - 1]!;
+  }
+
+  protected advance() {
+    if (!this.isAtEnd()) {
+      this.current++;
+    }
+    return this.previous();
+  }
+
+  protected isAtEnd() {
+    return this.peek().tokenType === TokenType.EOF;
+  }
+
+  protected peek(): Token {
+    return this.tokens[this.current]!;
+  }
+
+  protected consume(tokenType: TokenType, message: string): Token {
+    if (this.check(tokenType)) {
+      return this.advance();
+    }
+    throw new ParseError(this.peek(), message);
+  }
+
+  protected check(tokenType: TokenType) {
+    if (this.isAtEnd()) {
+      return false;
+    }
+
+    return this.peek().tokenType === tokenType;
+  }
+}
+
+class RecursiveDescentParser extends BaseParser {
+  constructor(tokens: Token[]) {
+    super(tokens);
+  }
 
   /**
    * Grammar:
@@ -63,7 +100,7 @@ class RecursiveDescentParser implements Parser {
    * unary        => ( "!" | "-" ) unary | primary
    * primary      => NUMBER
    */
-  parse(): Expression {
+  override parse(): Expression {
     return this.ternary();
   }
 
@@ -134,39 +171,97 @@ class RecursiveDescentParser implements Parser {
 
     return false;
   }
+}
 
-  private consume(tokenType: TokenType, message: string): Token {
-    if (this.check(tokenType)) {
-      return this.advance();
+enum Precedence {
+  NONE,
+  TERNARY,
+  TERM,
+  UNARY,
+  FACTOR,
+}
+
+type PrefixParseFn = () => Expression;
+
+type InfixParseFn = (left: Expression) => Expression;
+
+interface ParseRule {
+  prefix?: PrefixParseFn;
+  infix?: InfixParseFn;
+  precedence: Precedence;
+}
+
+class PrattParser extends BaseParser {
+  private number: PrefixParseFn = () => {
+    return new LiteralExpression(this.previous().literal!);
+  };
+
+  private unary: PrefixParseFn = () => {
+    const operator = this.previous();
+    const operand = this.parsePrecedence(Precedence.UNARY);
+    return new UnaryExpression(operator, operand);
+  };
+
+  private binary: InfixParseFn = (left: Expression) => {
+    const operator = this.previous();
+    const rule = this.getRule(operator.tokenType);
+    const right = this.parsePrecedence(rule!.precedence + 1);
+    return new BinaryExpression(left, operator, right);
+  };
+
+  private ternary: InfixParseFn = (left: Expression) => {
+    const thenBranch = this.parsePrecedence(Precedence.TERNARY + 1);
+    this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
+    const elseBranch = this.parsePrecedence(Precedence.TERNARY + 1);
+    return new ConditionalExpression(left, thenBranch, elseBranch);
+  };
+
+  private variable: PrefixParseFn = () => {
+    return new NameExpression(this.previous().lexeme!);
+  };
+
+  private parseRules: Record<TokenType, ParseRule> = {
+    NUMBER: { prefix: this.number, precedence: Precedence.NONE },
+    MINUS: { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM },
+    PLUS: { infix: this.binary, precedence: Precedence.TERM },
+    BANG: { precedence: Precedence.NONE },
+    EOF: { precedence: Precedence.NONE },
+    STAR: { infix: this.binary, precedence: Precedence.FACTOR },
+    SLASH: { infix: this.binary, precedence: Precedence.FACTOR },
+    QUESTION_MARK: { infix: this.ternary, precedence: Precedence.TERNARY },
+    COLON: { precedence: Precedence.NONE },
+    IDENTIFIER: { prefix: this.variable, precedence: Precedence.NONE },
+  };
+
+  constructor(tokens: Token[]) {
+    super(tokens);
+  }
+
+  override parse(): Expression {
+    return this.parsePrecedence(Precedence.TERNARY);
+  }
+
+  private parsePrecedence(precedence: Precedence): Expression {
+    let nextToken = this.advance();
+
+    const prefixRule = this.getRule(nextToken.tokenType).prefix;
+    if (!prefixRule) {
+      throw new Error('Expect expression.');
     }
-    throw new ParseError(this.peek(), message);
-  }
 
-  private advance() {
-    if (!this.isAtEnd()) {
-      this.current++;
-    }
-    return this.previous();
-  }
+    let expression = prefixRule();
 
-  private previous(): Token {
-    return this.tokens[this.current - 1]!;
-  }
-
-  private check(tokenType: TokenType) {
-    if (this.isAtEnd()) {
-      return false;
+    while (precedence <= this.getRule(this.peek().tokenType).precedence) {
+      const nextToken = this.advance();
+      const infixRule = this.getRule(nextToken.tokenType).infix!;
+      expression = infixRule(expression);
     }
 
-    return this.peek().tokenType === tokenType;
+    return expression;
   }
 
-  private isAtEnd() {
-    return this.peek().tokenType === TokenType.EOF;
-  }
-
-  private peek(): Token {
-    return this.tokens[this.current]!;
+  private getRule(tokenType: TokenType) {
+    return this.parseRules[tokenType];
   }
 }
 
@@ -206,8 +301,12 @@ const tests: { input: string; expression: Expression }[] = [
 
 tests.forEach((test) => {
   const tokens = scanner(test.input);
-  const parser = new RecursiveDescentParser(tokens);
-  assert.deepEqual(parser.parse(), test.expression);
+
+  const rdParser = new RecursiveDescentParser(tokens);
+  assert.deepEqual(rdParser.parse(), test.expression);
+
+  const prattParser = new PrattParser(tokens);
+  assert.deepEqual(prattParser.parse(), test.expression);
 });
 
 function scanner(input: string): Token[] {
@@ -218,12 +317,11 @@ function scanner(input: string): Token[] {
       if (!Number.isNaN(numVal)) {
         return new Token(TokenType.NUMBER, str, parseFloat(str));
       }
-      const stringToTokenType: { [k: string]: TokenType } = {
+      const stringToTokenType: Record<string, TokenType> = {
         '*': TokenType.STAR,
         '+': TokenType.PLUS,
         '/': TokenType.SLASH,
         '-': TokenType.MINUS,
-        '^': TokenType.CARET,
         '?': TokenType.QUESTION_MARK,
         ':': TokenType.COLON,
       };
