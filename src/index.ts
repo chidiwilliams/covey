@@ -15,25 +15,25 @@ enum TokenType {
   IDENTIFIER = 'IDENTIFIER',
 }
 
-interface Expression {}
+interface Expr {}
 
-class NameExpression implements Expression {
+class VariableExpr implements Expr {
   constructor(public name: string) {}
 }
 
-class UnaryExpression implements Expression {
-  constructor(public operator: Token, public expression: Expression) {}
+class UnaryExpr implements Expr {
+  constructor(public operator: Token, public expression: Expr) {}
 }
 
-class BinaryExpression implements Expression {
-  constructor(public left: Expression, public operator: Token, public right: Expression) {}
+class BinaryExpr implements Expr {
+  constructor(public left: Expr, public operator: Token, public right: Expr) {}
 }
 
-class ConditionalExpression implements Expression {
-  constructor(public condition: Expression, public thenBranch: Expression, public elseBranch: Expression) {}
+class ConditionalExpr implements Expr {
+  constructor(public condition: Expr, public thenBranch: Expr, public elseBranch: Expr) {}
 }
 
-class LiteralExpression {
+class LiteralExpr {
   constructor(public value: number) {}
 }
 
@@ -48,7 +48,7 @@ class Parser {
 
   constructor(private tokens: Token[]) {}
 
-  protected parse(): Expression {
+  protected parse(): Expr {
     throw new Error('not implemented');
   }
 
@@ -85,83 +85,8 @@ class Parser {
 
     return this.peek().tokenType === tokenType;
   }
-}
 
-class RecursiveDescentParser extends Parser {
-  constructor(tokens: Token[]) {
-    super(tokens);
-  }
-
-  /**
-   * Grammar:
-   * ternary      => term ( "?" ternary ":" ternary )*
-   * term         => factor ( ( "+" | "-" ) factor )*
-   * factor       => unary ( ( "/" | "*" ) unary )*
-   * unary        => ( "!" | "-" ) unary | primary
-   * primary      => NUMBER
-   */
-  override parse(): Expression {
-    return this.ternary();
-  }
-
-  private ternary(): Expression {
-    let expression = this.term();
-
-    if (this.match(TokenType.QUESTION_MARK)) {
-      const thenBranch = this.ternary();
-      this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
-      const elseBranch = this.ternary();
-      return new ConditionalExpression(expression, thenBranch, elseBranch);
-    }
-
-    return expression;
-  }
-
-  private term(): Expression {
-    let expression = this.factor();
-
-    while (this.match(TokenType.MINUS, TokenType.PLUS)) {
-      const operator = this.previous();
-      const right = this.factor();
-      expression = new BinaryExpression(expression, operator, right);
-    }
-
-    return expression;
-  }
-
-  private factor(): Expression {
-    let expression = this.unary();
-
-    while (this.match(TokenType.SLASH, TokenType.STAR)) {
-      const operator = this.previous();
-      const right = this.unary();
-      expression = new BinaryExpression(expression, operator, right);
-    }
-
-    return expression;
-  }
-
-  private unary(): Expression {
-    if (this.match(TokenType.BANG, TokenType.MINUS)) {
-      const operator = this.previous();
-      const expression = this.unary();
-      return new UnaryExpression(operator, expression);
-    }
-    return this.primary();
-  }
-
-  private primary(): Expression {
-    switch (true) {
-      case this.match(TokenType.NUMBER):
-        return new LiteralExpression(this.previous().literal!);
-      case this.match(TokenType.IDENTIFIER):
-        return new NameExpression(this.previous().lexeme!);
-      default:
-        throw new ParseError(this.peek(), 'Expect expression.');
-    }
-  }
-
-  private match(...tokenTypes: TokenType[]): boolean {
+  protected match(...tokenTypes: TokenType[]): boolean {
     for (const tokenType of tokenTypes) {
       if (this.check(tokenType)) {
         this.advance();
@@ -173,6 +98,73 @@ class RecursiveDescentParser extends Parser {
   }
 }
 
+class RecursiveDescentParser extends Parser {
+  constructor(tokens: Token[]) {
+    super(tokens);
+  }
+
+  override parse(): Expr {
+    return this.ternary();
+  }
+
+  private ternary(): Expr {
+    let expression = this.term();
+
+    if (this.match(TokenType.QUESTION_MARK)) {
+      const thenBranch = this.ternary();
+      this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
+      const elseBranch = this.ternary();
+      return new ConditionalExpr(expression, thenBranch, elseBranch);
+    }
+
+    return expression;
+  }
+
+  private term(): Expr {
+    let expression = this.factor();
+
+    while (this.match(TokenType.MINUS, TokenType.PLUS)) {
+      const operator = this.previous();
+      const right = this.factor();
+      expression = new BinaryExpr(expression, operator, right);
+    }
+
+    return expression;
+  }
+
+  private factor(): Expr {
+    let expression = this.unary();
+
+    while (this.match(TokenType.SLASH, TokenType.STAR)) {
+      const operator = this.previous();
+      const right = this.unary();
+      expression = new BinaryExpr(expression, operator, right);
+    }
+
+    return expression;
+  }
+
+  private unary(): Expr {
+    if (this.match(TokenType.BANG, TokenType.MINUS)) {
+      const operator = this.previous();
+      const expression = this.unary();
+      return new UnaryExpr(operator, expression);
+    }
+    return this.primary();
+  }
+
+  private primary(): Expr {
+    switch (true) {
+      case this.match(TokenType.NUMBER):
+        return new LiteralExpr(this.previous().literal!);
+      case this.match(TokenType.IDENTIFIER):
+        return new VariableExpr(this.previous().lexeme!);
+      default:
+        throw new ParseError(this.peek(), 'Expect expression.');
+    }
+  }
+}
+
 enum Precedence {
   NONE,
   TERNARY,
@@ -181,9 +173,9 @@ enum Precedence {
   FACTOR,
 }
 
-type PrefixParseFn = () => Expression;
+type PrefixParseFn = () => Expr;
 
-type InfixParseFn = (left: Expression) => Expression;
+type InfixParseFn = (left: Expr) => Expr;
 
 interface ParseRule {
   prefix?: PrefixParseFn;
@@ -193,38 +185,38 @@ interface ParseRule {
 
 class PrattParser extends Parser {
   private number: PrefixParseFn = () => {
-    return new LiteralExpression(this.previous().literal!);
+    return new LiteralExpr(this.previous().literal!);
   };
 
   private unary: PrefixParseFn = () => {
     const operator = this.previous();
     const operand = this.parsePrecedence(Precedence.UNARY);
-    return new UnaryExpression(operator, operand);
+    return new UnaryExpr(operator, operand);
   };
 
-  private binary: InfixParseFn = (left: Expression) => {
+  private binary: InfixParseFn = (left: Expr) => {
     const operator = this.previous();
     const rule = this.getRule(operator.tokenType);
-    const right = this.parsePrecedence(rule!.precedence + 1);
-    return new BinaryExpression(left, operator, right);
+    const right = this.parsePrecedence(rule.precedence + 1);
+    return new BinaryExpr(left, operator, right);
   };
 
-  private ternary: InfixParseFn = (left: Expression) => {
+  private ternary: InfixParseFn = (left: Expr) => {
     const thenBranch = this.parsePrecedence(Precedence.TERNARY + 1);
     this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
     const elseBranch = this.parsePrecedence(Precedence.TERNARY + 1);
-    return new ConditionalExpression(left, thenBranch, elseBranch);
+    return new ConditionalExpr(left, thenBranch, elseBranch);
   };
 
   private variable: PrefixParseFn = () => {
-    return new NameExpression(this.previous().lexeme!);
+    return new VariableExpr(this.previous().lexeme!);
   };
 
   private parseRules: Record<TokenType, ParseRule> = {
     NUMBER: { prefix: this.number, precedence: Precedence.NONE },
     MINUS: { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM },
     PLUS: { infix: this.binary, precedence: Precedence.TERM },
-    BANG: { precedence: Precedence.NONE },
+    BANG: { prefix: this.unary, precedence: Precedence.NONE },
     EOF: { precedence: Precedence.NONE },
     STAR: { infix: this.binary, precedence: Precedence.FACTOR },
     SLASH: { infix: this.binary, precedence: Precedence.FACTOR },
@@ -237,11 +229,11 @@ class PrattParser extends Parser {
     super(tokens);
   }
 
-  override parse(): Expression {
+  override parse(): Expr {
     return this.parsePrecedence(Precedence.TERNARY);
   }
 
-  private parsePrecedence(precedence: Precedence): Expression {
+  private parsePrecedence(precedence: Precedence): Expr {
     let nextToken = this.advance();
 
     const prefixRule = this.getRule(nextToken.tokenType).prefix;
@@ -267,34 +259,30 @@ class PrattParser extends Parser {
 
 import assert from 'assert';
 
-const tests: { input: string; expression: Expression }[] = [
-  { input: '1', expression: new LiteralExpression(1) },
+const tests: { input: string; expression: Expr }[] = [
+  { input: '1', expression: new LiteralExpr(1) },
   {
     input: '- 1 + 23 * 4 + 2 / 5 + 2',
-    expression: new BinaryExpression(
-      new BinaryExpression(
-        new BinaryExpression(
-          new UnaryExpression(new Token(TokenType.MINUS, '-', null), new LiteralExpression(1)),
+    expression: new BinaryExpr(
+      new BinaryExpr(
+        new BinaryExpr(
+          new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(1)),
           new Token(TokenType.PLUS, '+', null),
-          new BinaryExpression(
-            new LiteralExpression(23),
-            new Token(TokenType.STAR, '*', null),
-            new LiteralExpression(4)
-          )
+          new BinaryExpr(new LiteralExpr(23), new Token(TokenType.STAR, '*', null), new LiteralExpr(4))
         ),
         new Token(TokenType.PLUS, '+', null),
-        new BinaryExpression(new LiteralExpression(2), new Token(TokenType.SLASH, '/', null), new LiteralExpression(5))
+        new BinaryExpr(new LiteralExpr(2), new Token(TokenType.SLASH, '/', null), new LiteralExpr(5))
       ),
       new Token(TokenType.PLUS, '+', null),
-      new LiteralExpression(2)
+      new LiteralExpr(2)
     ),
   },
   {
     input: 'age + 4 ? 5 : 9 * height',
-    expression: new ConditionalExpression(
-      new BinaryExpression(new NameExpression('age'), new Token(TokenType.PLUS, '+', null), new LiteralExpression(4)),
-      new LiteralExpression(5),
-      new BinaryExpression(new LiteralExpression(9), new Token(TokenType.STAR, '*', null), new NameExpression('height'))
+    expression: new ConditionalExpr(
+      new BinaryExpr(new VariableExpr('age'), new Token(TokenType.PLUS, '+', null), new LiteralExpr(4)),
+      new LiteralExpr(5),
+      new BinaryExpr(new LiteralExpr(9), new Token(TokenType.STAR, '*', null), new VariableExpr('height'))
     ),
   },
 ];
