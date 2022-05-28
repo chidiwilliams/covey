@@ -11,7 +11,7 @@ import {
   TokenType,
   UnaryExpr,
   VariableExpr,
-} from './parser/parser';
+} from './parser';
 
 const tests: { input: string; expression: Expr }[] = [
   { input: '1', expression: new LiteralExpr(1) },
