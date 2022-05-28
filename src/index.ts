@@ -271,7 +271,9 @@ class Parser {
 
   /**
    * Checks if the next token matches the given type. If it does, we
-   * advance to the next index and return the previous token. If not, * we throw a {@link ParseError} with the given message.  *
+   * advance to the next index and return the previous token. If not,
+   * we throw a {@link ParseError} with the given message.
+   *
    * @param tokenType Expected token type
    * @param message Error message
    */
@@ -349,7 +351,7 @@ class Parser {
  * ternary    => term "?" ternary ":" ternary
  * term       => factor ( ( "-" | "+") factor )*
  * factor     => unary ( ( "*" | "/") unary )*
- * unary      => ( "!" | "-" ) unary | primary
+ * unary      => ( "-" ) unary | primary
  * primary    => NUMBER | IDENTIFIER
  *
  * This grammar describes the precedence from lowest (top) to highest (bottom).
@@ -407,8 +409,8 @@ class RecursiveDescentParser extends Parser {
   /**
    * Parses an expression with a precedence of "term" or lower.
    * It first parses a "factor" expression. Then, if it can match a minus
-   * or plus sign token, it parses another "factor" expression and continues to do
-   * so to make a binary expression.
+   * or plus sign token, it parses another "factor" expression and continues
+   * to do so to make a binary expression.
    *
    * @returns Parsed expression
    */
@@ -479,12 +481,30 @@ class RecursiveDescentParser extends Parser {
   }
 }
 
+/**
+ * Next, we'll implement Pratt parsing...
+ *
+ * The key idea behind Pratt parsing is as follows:
+ *     - Every expression consists of a "prefix expression" followed by
+ *       zero or more "infix expressions" of the same or lower precedence
+ *     - An prefix expression is a number, a variable, or a "unary expression"
+ *     - A unary expression is a unary token (e.g. "-") followed by an
+ *       expression with a precedence of at least UNARY
+ *     - An infix expression is a "binary expression" (e.g. "-", "+", "/", "*")
+ *       or a "ternary expression" ("?:")
+ *     - A binary expression matches the binary operator and the right operand,
+ *       which must be an expression with a precedence greater than that of the
+ *       binary operator
+ *     - A ternary expression matches the "?" and the then and else branches,
+ *       which must both have precedences of at least TERNARY
+ */
+
 enum Precedence {
   NONE,
   TERNARY,
   TERM,
-  UNARY,
   FACTOR,
+  UNARY,
 }
 
 type PrefixParseFn = () => Expr;
@@ -498,47 +518,6 @@ interface ParseRule {
 }
 
 class PrattParser extends Parser {
-  private number: PrefixParseFn = () => {
-    return new LiteralExpr(this.previous().literal!);
-  };
-
-  private unary: PrefixParseFn = () => {
-    const operator = this.previous();
-    const operand = this.parsePrecedence(Precedence.UNARY);
-    return new UnaryExpr(operator, operand);
-  };
-
-  private binary: InfixParseFn = (left: Expr) => {
-    const operator = this.previous();
-    const rule = this.getRule(operator.tokenType);
-    const right = this.parsePrecedence(rule.precedence + 1);
-    return new BinaryExpr(left, operator, right);
-  };
-
-  private ternary: InfixParseFn = (left: Expr) => {
-    const thenBranch = this.parsePrecedence(Precedence.TERNARY + 1);
-    this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
-    const elseBranch = this.parsePrecedence(Precedence.TERNARY + 1);
-    return new ConditionalExpr(left, thenBranch, elseBranch);
-  };
-
-  private variable: PrefixParseFn = () => {
-    return new VariableExpr(this.previous());
-  };
-
-  private parseRules: Record<TokenType, ParseRule> = {
-    NUMBER: { prefix: this.number, precedence: Precedence.NONE },
-    MINUS: { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM },
-    PLUS: { infix: this.binary, precedence: Precedence.TERM },
-    BANG: { prefix: this.unary, precedence: Precedence.NONE },
-    EOF: { precedence: Precedence.NONE },
-    STAR: { infix: this.binary, precedence: Precedence.FACTOR },
-    SLASH: { infix: this.binary, precedence: Precedence.FACTOR },
-    QUESTION_MARK: { infix: this.ternary, precedence: Precedence.TERNARY },
-    COLON: { precedence: Precedence.NONE },
-    IDENTIFIER: { prefix: this.variable, precedence: Precedence.NONE },
-  };
-
   override parse(): Expr {
     return this.parsePrecedence(Precedence.TERNARY);
   }
@@ -562,10 +541,53 @@ class PrattParser extends Parser {
     return expression;
   }
 
+  private number: PrefixParseFn = () => {
+    return new LiteralExpr(this.previous().literal!);
+  };
+
+  private unary: PrefixParseFn = () => {
+    const operator = this.previous();
+    const operand = this.parsePrecedence(Precedence.UNARY);
+    return new UnaryExpr(operator, operand);
+  };
+
+  private binary: InfixParseFn = (left: Expr) => {
+    const operator = this.previous();
+    const rule = this.getRule(operator.tokenType);
+    const right = this.parsePrecedence(rule.precedence + 1);
+    return new BinaryExpr(left, operator, right);
+  };
+
+  private ternary: InfixParseFn = (left: Expr) => {
+    const thenBranch = this.parsePrecedence(Precedence.TERNARY);
+    this.consume(TokenType.COLON, 'Expect colon after ternary condition.');
+    const elseBranch = this.parsePrecedence(Precedence.TERNARY);
+    return new ConditionalExpr(left, thenBranch, elseBranch);
+  };
+
+  private variable: PrefixParseFn = () => {
+    return new VariableExpr(this.previous());
+  };
+
+  private parseRules: Record<TokenType, ParseRule> = {
+    NUMBER: { prefix: this.number, precedence: Precedence.NONE },
+    MINUS: { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM },
+    PLUS: { infix: this.binary, precedence: Precedence.TERM },
+    BANG: { prefix: this.unary, precedence: Precedence.NONE },
+    EOF: { precedence: Precedence.NONE },
+    STAR: { infix: this.binary, precedence: Precedence.FACTOR },
+    SLASH: { infix: this.binary, precedence: Precedence.FACTOR },
+    QUESTION_MARK: { infix: this.ternary, precedence: Precedence.TERNARY },
+    COLON: { precedence: Precedence.NONE },
+    IDENTIFIER: { prefix: this.variable, precedence: Precedence.NONE },
+  };
+
   private getRule(tokenType: TokenType) {
     return this.parseRules[tokenType];
   }
 }
+
+/* TESTS */
 
 import assert from 'assert';
 
@@ -578,6 +600,30 @@ const tests: { input: string; expression: Expr }[] = [
       new UnaryExpr(
         new Token(TokenType.MINUS, '-', null),
         new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(1))
+      )
+    ),
+  },
+  {
+    input: '1 + 2 + 3',
+    expression: new BinaryExpr(
+      new BinaryExpr(new LiteralExpr(1), new Token(TokenType.PLUS, '+', null), new LiteralExpr(2)),
+      new Token(TokenType.PLUS, '+', null),
+      new LiteralExpr(3)
+    ),
+  },
+  {
+    input: '- 1 * - 1 + - 2 / - 2',
+    expression: new BinaryExpr(
+      new BinaryExpr(
+        new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(1)),
+        new Token(TokenType.STAR, '*', null),
+        new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(1))
+      ),
+      new Token(TokenType.PLUS, '+', null),
+      new BinaryExpr(
+        new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(2)),
+        new Token(TokenType.SLASH, '/', null),
+        new UnaryExpr(new Token(TokenType.MINUS, '-', null), new LiteralExpr(2))
       )
     ),
   },
@@ -614,11 +660,19 @@ const tests: { input: string; expression: Expr }[] = [
     ),
   },
   {
-    input: '1 + 2 + 3',
-    expression: new BinaryExpr(
-      new BinaryExpr(new LiteralExpr(1), new Token(TokenType.PLUS, '+', null), new LiteralExpr(2)),
-      new Token(TokenType.PLUS, '+', null),
-      new LiteralExpr(3)
+    input: '0 ? 1 : 1 ? 2 : 3',
+    expression: new ConditionalExpr(
+      new LiteralExpr(0),
+      new LiteralExpr(1),
+      new ConditionalExpr(new LiteralExpr(1), new LiteralExpr(2), new LiteralExpr(3))
+    ),
+  },
+  {
+    input: '1 ? 0 ? 2 : 3 : 1',
+    expression: new ConditionalExpr(
+      new LiteralExpr(1),
+      new ConditionalExpr(new LiteralExpr(0), new LiteralExpr(2), new LiteralExpr(3)),
+      new LiteralExpr(1)
     ),
   },
 ];
@@ -627,8 +681,8 @@ tests.forEach((test) => {
   const tokens = scanner(test.input);
 
   const rdParser = new RecursiveDescentParser(tokens);
-  assert.deepEqual(rdParser.parse(), test.expression);
+  assert.deepEqual(rdParser.parse(), test.expression, 'recursive descent');
 
   const prattParser = new PrattParser(tokens);
-  assert.deepEqual(prattParser.parse(), test.expression);
+  assert.deepEqual(prattParser.parse(), test.expression, 'pratt');
 });
