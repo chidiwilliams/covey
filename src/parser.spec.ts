@@ -97,6 +97,14 @@ const tests: { input: string; expression: Expr }[] = [
       new LiteralExpr(1)
     ),
   },
+  {
+    input: '2 - 3 - 4',
+    expression: new BinaryExpr(
+      new BinaryExpr(new LiteralExpr(2), new Token(TokenType.MINUS, '-', null), new LiteralExpr(3)),
+      new Token(TokenType.MINUS, '-', null),
+      new LiteralExpr(4)
+    ),
+  },
 ];
 
 tests.forEach((test) => {
