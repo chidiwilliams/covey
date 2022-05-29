@@ -1,3 +1,3 @@
-module covey-go
+module covey
 
 go 1.17

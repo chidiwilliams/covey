@@ -5,7 +5,7 @@ A tiny expression language to compare **recursive descent** and **Pratt parsing*
 Implementation:
 
 - [TypeScript](./ts/src/parser.ts)
-- [Go](./go/parser.go).
+- [Go](./go/parser.go)
 
 Benchmarks:
 
