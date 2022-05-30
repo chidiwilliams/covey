@@ -10,13 +10,13 @@ import {
   VariableExpr,
 } from './parser';
 
-export type OptimizedPrefixParseFn = (p: OptimizedPrattParser) => Expr;
+export type PrefixParseFn = (parser: OptimizedPrattParser) => Expr;
 
-export type OptimizedInfixParseFn = (p: OptimizedPrattParser, left: Expr) => Expr;
+export type InfixParseFn = (parser: OptimizedPrattParser, left: Expr) => Expr;
 
-export interface OptimizedParseRule {
-  prefix?: OptimizedPrefixParseFn;
-  infix?: OptimizedInfixParseFn;
+export interface ParseRule {
+  prefix?: PrefixParseFn;
+  infix?: InfixParseFn;
   precedence: Precedence;
 }
 
@@ -43,12 +43,12 @@ export class OptimizedPrattParser extends Parser {
     return expression;
   }
 
-  public getRule(tokenType: TokenType): OptimizedParseRule {
+  public getRule(tokenType: TokenType): ParseRule {
     return parseRules[tokenType]!;
   }
 }
 
-var parseRules: OptimizedParseRule[] = [
+var parseRules: ParseRule[] = [
   { infix: binary, precedence: Precedence.TERM }, // PLUS
   { prefix: unary, infix: binary, precedence: Precedence.TERM }, // MINUS
   { prefix: unary, precedence: Precedence.NONE }, // BANG
@@ -61,30 +61,30 @@ var parseRules: OptimizedParseRule[] = [
   { prefix: variable, precedence: Precedence.NONE }, // IDENTIFIER
 ];
 
-function number(p: OptimizedPrattParser) {
-  return new LiteralExpr(p.previous().literal!);
+function number(parser: OptimizedPrattParser) {
+  return new LiteralExpr(parser.previous().literal!);
 }
 
-function variable(p: OptimizedPrattParser) {
-  return new VariableExpr(p.previous());
+function variable(parser: OptimizedPrattParser) {
+  return new VariableExpr(parser.previous());
 }
 
-function unary(p: OptimizedPrattParser) {
-  const operator = p.previous();
-  const operand = p.parsePrecedence(Precedence.UNARY);
+function unary(parser: OptimizedPrattParser) {
+  const operator = parser.previous();
+  const operand = parser.parsePrecedence(Precedence.UNARY);
   return new UnaryExpr(operator, operand);
 }
 
-function binary(p: OptimizedPrattParser, left: Expr) {
-  const operator = p.previous();
-  const rule = p.getRule(operator.tokenType);
-  const right = p.parsePrecedence(rule.precedence + 1);
+function binary(parser: OptimizedPrattParser, left: Expr) {
+  const operator = parser.previous();
+  const rule = parser.getRule(operator.tokenType);
+  const right = parser.parsePrecedence(rule.precedence + 1);
   return new BinaryExpr(left, operator, right);
 }
 
-function ternary(p: OptimizedPrattParser, left: Expr) {
-  const thenBranch = p.parsePrecedence(Precedence.TERNARY);
-  p.consume(TokenType.COLON, 'Expect colon after ternary condition.');
-  const elseBranch = p.parsePrecedence(Precedence.TERNARY);
+function ternary(parser: OptimizedPrattParser, left: Expr) {
+  const thenBranch = parser.parsePrecedence(Precedence.TERNARY);
+  parser.consume(TokenType.COLON, 'Expect colon after ternary condition.');
+  const elseBranch = parser.parsePrecedence(Precedence.TERNARY);
   return new ConditionalExpr(left, thenBranch, elseBranch);
 }
