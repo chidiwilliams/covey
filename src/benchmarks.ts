@@ -1,4 +1,5 @@
 import Benchmark from 'benchmark';
+import { OptimizedPrattParser } from './optimized-pratt-parser';
 import { PrattParser, RecursiveDescentParser, scanner } from './parser';
 
 const allInputs = [
@@ -19,6 +20,10 @@ allInputs.forEach((input) => {
     })
     .add('Pratt', () => {
       const parser = new PrattParser(tokens);
+      parser.parse();
+    })
+    .add('Optimized Pratt', () => {
+      const parser = new OptimizedPrattParser(tokens);
       parser.parse();
     })
     .on('cycle', (event: any) => {

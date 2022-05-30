@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { OptimizedPrattParser } from './optimized-pratt-parser';
 import {
   BinaryExpr,
   ConditionalExpr,
@@ -115,4 +116,7 @@ tests.forEach((test) => {
 
   const prattParser = new PrattParser(tokens);
   assert.deepEqual(prattParser.parse(), test.expression, 'pratt');
+
+  const optimizedPrattParser = new OptimizedPrattParser(tokens);
+  assert.deepEqual(optimizedPrattParser.parse(), test.expression, 'optimized pratt');
 });

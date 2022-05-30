@@ -192,7 +192,7 @@ export function scanner(input: string): Token[] {
 /**
  * A ParseError is an error that occurs during parsing.
  */
-class ParseError extends Error {
+export class ParseError extends Error {
   /**
    * @param token The token being parsed when the error occured
    * @param message The error message
@@ -213,7 +213,7 @@ class ParseError extends Error {
  * well as some helper functions for peeking around the token list
  * and matching token types.
  */
-class Parser {
+export class Parser {
   /**
    * The index of the current token being parsed.
    */
@@ -241,14 +241,14 @@ class Parser {
   /**
    * Returns the next token in the list
    */
-  protected peek(): Token {
+  public peek(): Token {
     return this.tokens[this.current]!;
   }
 
   /**
    * Returns the previous token in the list
    */
-  protected previous(): Token {
+  public previous(): Token {
     return this.tokens[this.current - 1]!;
   }
 
@@ -277,7 +277,7 @@ class Parser {
    * @param tokenType Expected token type
    * @param message Error message
    */
-  protected consume(tokenType: TokenType, message: string): Token {
+  public consume(tokenType: TokenType, message: string): Token {
     if (this.check(tokenType)) {
       return this.advance();
     }
@@ -288,7 +288,7 @@ class Parser {
    * Returns true if the next set of tokens match the given token types.
    * @param tokenTypes Expected token types
    */
-  protected match(...tokenTypes: TokenType[]): boolean {
+  public match(...tokenTypes: TokenType[]): boolean {
     for (const tokenType of tokenTypes) {
       if (this.check(tokenType)) {
         this.advance();
@@ -507,7 +507,7 @@ export class RecursiveDescentParser extends Parser {
 /**
  * Operator precedence, from the lowest (NONE = 0) to the highest (UNARY)
  */
-enum Precedence {
+export enum Precedence {
   NONE,
   TERNARY,
   TERM,
@@ -518,19 +518,19 @@ enum Precedence {
 /**
  * A prefix parse function parses a prefix expression
  */
-type PrefixParseFn = () => Expr;
+export type PrefixParseFn = () => Expr;
 
 /**
  * An infix parse function accepts the left operand of an
  * infix expression and parses the rest of the expression
  */
-type InfixParseFn = (left: Expr) => Expr;
+export type InfixParseFn = (left: Expr) => Expr;
 
 /**
  * A parse rule defines the parse functions for a token type
  * as well as its precedence (only applies when used as infix)
  */
-interface ParseRule {
+export interface ParseRule {
   prefix?: PrefixParseFn;
   infix?: InfixParseFn;
   precedence: Precedence;
