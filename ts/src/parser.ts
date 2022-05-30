@@ -26,16 +26,16 @@ export class Token {
  * A TokenType represent a type of token.
  */
 export enum TokenType {
-  PLUS = 'PLUS',
-  MINUS = 'MINUS',
-  BANG = 'BANG',
-  NUMBER = 'NUMBER',
-  EOF = 'EOF',
-  STAR = 'STAR',
-  SLASH = 'SLASH',
-  QUESTION_MARK = 'QUESTION_MARK',
-  COLON = 'COLON',
-  IDENTIFIER = 'IDENTIFIER',
+  PLUS,
+  MINUS,
+  BANG,
+  NUMBER,
+  EOF,
+  STAR,
+  SLASH,
+  QUESTION_MARK,
+  COLON,
+  IDENTIFIER,
 }
 
 /**
@@ -169,7 +169,7 @@ export function scanner(input: string): Token[] {
         // If not: if it matches one of the mapped token
         // types, then we create a token of that type
         const tokenType = stringToTokenType[str];
-        if (tokenType) {
+        if (tokenType !== undefined) {
           return new Token(tokenType, str, null);
         }
 
@@ -348,7 +348,7 @@ class Parser {
  * language in LL(1) form:
  *
  * expression => ternary
- * ternary    => term "?" ternary ":" ternary
+ * ternary    => term ( "?" ternary ":" ternary )?
  * term       => factor ( ( "-" | "+") factor )*
  * factor     => unary ( ( "*" | "/") unary )*
  * unary      => ( "-" ) unary | primary
@@ -472,7 +472,7 @@ export class RecursiveDescentParser extends Parser {
  *
  * Pratt parsing is as follows:
  *     - Every expression consists of a "prefix expression" followed by
- *       zero or more "infix expressions" of the same or lower precedence
+ *       zero or more "infix expressions" of the same or higher precedence
  *     - An prefix expression is a number, a variable, or a "unary expression"
  *     - A unary expression is a unary token (e.g. "-") followed by an
  *       expression with a precedence of at least UNARY
@@ -637,18 +637,18 @@ export class PrattParser extends Parser {
   /**
    * A map of token types to their corresponding parsing functions and precedences
    */
-  private parseRules: Record<TokenType, ParseRule> = {
-    NUMBER: { prefix: this.number, precedence: Precedence.NONE },
-    MINUS: { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM },
-    PLUS: { infix: this.binary, precedence: Precedence.TERM },
-    BANG: { prefix: this.unary, precedence: Precedence.NONE },
-    EOF: { precedence: Precedence.NONE },
-    STAR: { infix: this.binary, precedence: Precedence.FACTOR },
-    SLASH: { infix: this.binary, precedence: Precedence.FACTOR },
-    QUESTION_MARK: { infix: this.ternary, precedence: Precedence.TERNARY },
-    COLON: { precedence: Precedence.NONE },
-    IDENTIFIER: { prefix: this.variable, precedence: Precedence.NONE },
-  };
+  private parseRules: ParseRule[] = [
+    { infix: this.binary, precedence: Precedence.TERM }, // PLUS
+    { prefix: this.unary, infix: this.binary, precedence: Precedence.TERM }, // MINUS
+    { prefix: this.unary, precedence: Precedence.NONE }, // BANG
+    { prefix: this.number, precedence: Precedence.NONE }, // NUMBER
+    { precedence: Precedence.NONE }, // EOF
+    { infix: this.binary, precedence: Precedence.FACTOR }, // STAR
+    { infix: this.binary, precedence: Precedence.FACTOR }, // SLASH
+    { infix: this.ternary, precedence: Precedence.TERNARY }, // QUESTION_MARK
+    { precedence: Precedence.NONE }, // COLON
+    { prefix: this.variable, precedence: Precedence.NONE }, // IDENTIFIER
+  ];
 
   /**
    * ...and a function that:
@@ -658,7 +658,7 @@ export class PrattParser extends Parser {
    *
    * Returns the parsing functions and precedences for a token type
    */
-  private getRule(tokenType: TokenType) {
-    return this.parseRules[tokenType];
+  private getRule(tokenType: TokenType): ParseRule {
+    return this.parseRules[tokenType]!;
   }
 }
